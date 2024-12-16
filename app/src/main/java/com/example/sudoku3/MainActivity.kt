@@ -37,12 +37,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -56,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.times
 import com.example.sudoku3.ui.theme.Sudoku3Theme
+import kotlinx.coroutines.delay
 import kotlin.concurrent.fixedRateTimer
 
 class MainActivity : ComponentActivity() {
@@ -66,18 +69,29 @@ class MainActivity : ComponentActivity() {
             val errorMessage = remember { mutableStateOf("") }
             val selectedDifficulty = remember { mutableStateOf("Easy") }
             val isNotesMode = remember { mutableStateOf(false) }
+            val timerSeconds = remember { mutableStateOf(0) }
+            val gameFinished = remember { mutableStateOf(false) }
+            // Timer Coroutine
+            LaunchedEffect(Unit) {
+                while (!gameFinished.value) {
+                    delay(1000L)
+                    timerSeconds.value++
+                }
+            }
             Sudoku3Theme {
                 // A surface container using the 'background' color from the theme
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    SudokuScreen(
-                        sudokuGrid = sudokuGrid,
-                        errorMessage = errorMessage,
-                        selectedDifficulty = selectedDifficulty,
-                        isNotesMode = isNotesMode
-                    )
+
+                        SudokuScreen(
+                            sudokuGrid = sudokuGrid,
+                            errorMessage = errorMessage,
+                            selectedDifficulty = selectedDifficulty,
+                            isNotesMode = isNotesMode
+
+                        )
                 }
             }
         }
@@ -92,6 +106,7 @@ data class SudokuCell(
     var isSelected: Boolean = false,
     var isError:Boolean = false
 )
+//data class SudokuCell(val row: Int, val col: Int, var value: Int = 0)
 
 
 @Composable
@@ -103,11 +118,20 @@ fun SudokuScreen(
 ) {
     var selectedCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val previousGrid = remember { mutableStateOf<List<List<SudokuCell>>?>(null) }
+    val timerSeconds = remember { mutableStateOf(0) }
+    val gameFinished = remember { mutableStateOf(false) }
     val configuration = LocalConfiguration.current
     val screenWidth = configuration.screenWidthDp.dp
     val titleFontSize = if (screenWidth < 600.dp) 32.sp else 48.sp
     val iconSize = if (screenWidth < 600.dp) 30.dp else 50.dp
-    val panelFontSize = if (screenWidth < 600.dp) 36.sp else 48.sp
+
+    // Timer Coroutine
+    LaunchedEffect(Unit) {
+        while (!gameFinished.value) {
+            delay(1000L)
+            timerSeconds.value++
+        }
+    }
 
     Column(modifier = Modifier
         .fillMaxSize()
@@ -120,14 +144,13 @@ fun SudokuScreen(
             modifier = Modifier.align(Alignment.CenterHorizontally)
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Not Modu ve Zorluk Seviyesi Butonları
+        // Zorluk Seçim ve Timer Row
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(2.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             DifficultySelector(
                 selectedDifficulty = selectedDifficulty.value,
@@ -138,57 +161,55 @@ fun SudokuScreen(
                     selectedCell = null
                 }
             )
+
+            Text("Time: ${formatTime(timerSeconds.value)}", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
-        Spacer(modifier = Modifier.height(6.dp))
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // Sudoku Grid
         SudokuGrid(
             grid = sudokuGrid.value,
             errorMessage = errorMessage.value,
             selectedCell = selectedCell,
             onCellClick = { row, col ->
-                selectedCell = Pair(row, col) // Seçili hücre güncelleniyor
+                selectedCell = Pair(row, col)
             },
-            isNotesMode = isNotesMode.value
+            isNotesMode = isNotesMode.value,
+            gameFinished = gameFinished
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-Column {
 
-}
-
+        // Icon Row
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(2.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-
-
             Icon(
                 Icons.Outlined.Edit,
                 contentDescription = if (isNotesMode.value) "Not Modu Kapat" else "Not Modu Aç",
                 modifier = Modifier
-                    .padding(6.dp)
                     .size(iconSize)
                     .clickable { isNotesMode.value = !isNotesMode.value },
-                tint = if (isNotesMode.value) Color.Green else Color.Blue)
+                tint = if (isNotesMode.value) Color.Green else Color.Blue
+            )
             Icon(
                 Icons.Default.Refresh,
                 contentDescription = "Reset",
                 modifier = Modifier
-                    .padding(6.dp)
                     .size(iconSize)
                     .clickable {
                         sudokuGrid.value = generateSudokuBoard(selectedDifficulty.value)
-                        errorMessage.value = ""
-                        selectedCell = null
+                        timerSeconds.value = 0
+                        gameFinished.value = false
                     },
-                tint =  Color.Blue)
+                tint = Color.Blue
+            )
             Icon(
                 Icons.Default.ArrowBack,
-                contentDescription = "Reset",
+                contentDescription = "Undo",
                 modifier = Modifier
-                    .padding(6.dp)
                     .size(iconSize)
                     .clickable {
                         if (previousGrid.value != null) {
@@ -196,12 +217,14 @@ Column {
                             previousGrid.value = null
                         }
                     },
-                tint =  Color.Blue
+                tint = Color.Blue
             )
         }
+
         Spacer(modifier = Modifier.height(16.dp))
-        // NumbersPanel (Sayı Girişi)
-        NumbersPanel(onNumberSelected = { number ->
+
+        // NumbersPanel
+        NumbersPanel { number ->
             selectedCell?.let { (row, col) ->
                 previousGrid.value = sudokuGrid.value.map { it.map { cell -> cell.copy() } } // Önceki durumu kaydet
                 if (isNotesMode.value) {
@@ -217,12 +240,22 @@ Column {
                     }
                 }
             }
-        })
-        // Reset Butonu
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+        }
 
+        if (gameFinished.value) {
+            Text(
+                "Congratulations! You've completed the puzzle!",
+                color = Color.Green,
+                fontSize = 20.sp,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
         }
     }
+}
+fun formatTime(seconds: Int): String {
+    val minutes = seconds / 60
+    val secs = seconds % 60
+    return String.format("%02d:%02d", minutes, secs)
 }
 
 private operator fun Unit.not(): Boolean {
@@ -317,13 +350,7 @@ fun DifficultySelector(selectedDifficulty: String, onDifficultySelected: (String
     val configuration = LocalConfiguration.current
     val screenWidth = configuration.screenWidthDp.dp
     val iconSize = if (screenWidth < 600.dp) 30.dp else 50.dp
-   /* Box(modifier = Modifier.fillMaxWidth(),
-        contentAlignment = Alignment.Center,
-        ) {
-        Button(onClick = { expanded = true }) {
-            Text(modifier = Modifier.padding(2.dp),
-                fontSize = 12.sp, text = "Difficulty: $selectedDifficulty")
-        }*/
+
     Icon(
         Icons.Default.Menu,
         contentDescription = "Diffuculty Selector",
@@ -349,8 +376,7 @@ fun DifficultySelector(selectedDifficulty: String, onDifficultySelected: (String
                 )
             }
         }
-    TimerExample()
-    }
+}
 
 fun updateCellPossibilities(
     grid: MutableState<List<List<SudokuCell>>>,
@@ -392,7 +418,8 @@ fun SudokuGrid(
     errorMessage: String,
     selectedCell: Pair<Int, Int>?,
     onCellClick: (Int, Int) -> Unit,
-    isNotesMode: Boolean
+    isNotesMode: Boolean,
+    gameFinished: MutableState<Boolean>
 ) {
     val cellSize = calculateCellSize()
 
@@ -409,6 +436,14 @@ fun SudokuGrid(
                 }
             }
         }
+
+        // Oyun bitti kontrolü
+        LaunchedEffect(grid) {
+            if (grid.all { row -> row.all { it.value != 0 } }) {
+                gameFinished.value = true
+            }
+        }
+
         if (errorMessage.isNotEmpty()) {
             Text(
                 text = errorMessage,
@@ -432,23 +467,22 @@ fun SudokuCellView(
         isSelected -> Color.Cyan.copy(alpha = 0.3f) // Seçili hücre
         else -> Color.White
     }
-    var showDialog by remember { mutableStateOf(false) }
 
     val borderColorBlack = Color.Black
     val borderColorGray = Color.Gray
     Box(
         modifier = Modifier
             .size(cellSize)
-           // .border(1.dp, Color.Black)
+            // .border(1.dp, Color.Black)
             .background(backgroundColor)
             .clickable { onCellClick() }
             .drawBehind {
                 drawLine(
-                color = if (cell.row % 3 == 0) borderColorBlack else borderColorGray,
-                start = Offset(0f, 0f),
-                end = Offset(size.width, 0f),
-                strokeWidth = if (cell.row % 3 == 0) 4f else 2f
-            )
+                    color = if (cell.row % 3 == 0) borderColorBlack else borderColorGray,
+                    start = Offset(0f, 0f),
+                    end = Offset(size.width, 0f),
+                    strokeWidth = if (cell.row % 3 == 0) 4f else 2f
+                )
                 // Alt çizgi
                 drawLine(
                     color = if ((cell.row + 1) % 3 == 0) borderColorBlack else borderColorGray,
@@ -469,7 +503,8 @@ fun SudokuCellView(
                     start = Offset(size.width, 0f),
                     end = Offset(size.width, size.height),
                     strokeWidth = if ((cell.col + 1) % 3 == 0) 4f else 2f
-                ) },
+                )
+            },
         contentAlignment = Alignment.Center,
     ) {
         if (cell.value != 0) {
@@ -580,12 +615,14 @@ fun GreetingPreview() {
         val errorMessage = remember { mutableStateOf("") }
         val selectedDifficulty = remember { mutableStateOf("Easy") }
         val isNotesMode = remember { mutableStateOf(false) }
-
+        val timerSeconds = remember { mutableStateOf(0) }
+        val gameFinished = remember { mutableStateOf(false) }
         SudokuScreen(
             sudokuGrid = sudokuGrid,
             errorMessage = errorMessage,
             selectedDifficulty = selectedDifficulty,
             isNotesMode = isNotesMode
+
         )
     }
 }

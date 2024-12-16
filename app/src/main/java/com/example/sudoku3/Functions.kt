@@ -1,8 +1,17 @@
 package com.example.sudoku3
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Button
@@ -11,16 +20,24 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 /*
 fun updateCellValue(
@@ -200,38 +217,85 @@ fun getSelectedCell(grid: List<List<SudokuCell>>): Pair<Int?, Int?> {
     return Pair(null, null)
 }*/
 @Composable
-fun formatTime(seconds: Int): String {
-    val minutes = seconds / 60
-    val remainingSeconds = seconds % 60
-    return String.format("%02d:%02d", minutes, remainingSeconds)
-}
+fun TimerScreenContent(timerViewModel: TimerViewModel) {
+    val timerValue by timerViewModel.timer.collectAsState()
 
+    TimerScreen(
+        timerValue = timerValue,
+        onStartClick = { timerViewModel.startTimer() },
+        onPauseClick = { timerViewModel.pauseTimer() },
+        onStopClick = { timerViewModel.stopTimer() }
+    )
+}
+fun Long.formatTime(): String {
+    val hours = this / 3600
+    val minutes = (this % 3600) / 60
+    val remainingSeconds = this % 60
+    return String.format("%02d:%02d:%02d", hours, minutes, remainingSeconds)
+}
 @Composable
-fun TimerExample() {
-    var seconds by remember { mutableStateOf(0) }
-    val configuration = LocalConfiguration.current
-    val screenWidth = configuration.screenWidthDp.dp
-    val iconSize = if (screenWidth < 600.dp) 30.dp else 50.dp
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000)
-            seconds++
+fun TimerScreen(
+    timerValue: Long,
+    onStartClick: () -> Unit,
+    onPauseClick: () -> Unit,
+    onStopClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row {
+            Icon(Icons.Filled.CheckCircle, contentDescription = "Timer Icon", modifier = Modifier.padding(end = 8.dp))
+            Text(text = timerValue.formatTime(), fontSize = 24.sp)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Button(onClick = onStartClick) {
+                Text("Start")
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Button(onClick = onPauseClick) {
+                Text("Pause")
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Button(onClick = onStopClick) {
+                Text("Stop")
+            }
         }
     }
-   Button(onClick = { /*TODO*/ }) {
-     /*  Icon(
-           Icons.Default.Timer,
-           contentDescription = "Timer",
-           modifier = Modifier
-               .padding(6.dp)
-               .size(iconSize),
-           tint =  Color.Blue
-       )*/
-       Text(
-           text = formatTime(seconds),
-           fontSize = 16.sp,
-           modifier = Modifier.padding(start = 8.dp)
-       )
-   }
+}
+class TimerViewModel : ViewModel() {
+    private val _timer = MutableStateFlow(0L)
+    val timer = _timer.asStateFlow()
 
+    private var timerJob: Job? = null
+
+    fun startTimer() {
+        timerJob?.cancel()
+        timerJob = viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                _timer.value++
+            }
+        }
+    }
+
+    fun pauseTimer() {
+        timerJob?.cancel()
+    }
+
+    fun stopTimer() {
+        _timer.value = 0
+        timerJob?.cancel()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        timerJob?.cancel()
+    }
 }
