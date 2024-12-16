@@ -16,15 +16,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.paddingFrom
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,6 +45,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.times
 import com.example.sudoku3.ui.theme.Sudoku3Theme
+import kotlin.concurrent.fixedRateTimer
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,6 +92,8 @@ data class SudokuCell(
     var isSelected: Boolean = false,
     var isError:Boolean = false
 )
+
+
 @Composable
 fun SudokuScreen(
     sudokuGrid: MutableState<List<List<SudokuCell>>>,
@@ -89,12 +102,20 @@ fun SudokuScreen(
     isNotesMode: MutableState<Boolean>
 ) {
     var selectedCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    val previousGrid = remember { mutableStateOf<List<List<SudokuCell>>?>(null) }
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp.dp
+    val titleFontSize = if (screenWidth < 600.dp) 32.sp else 48.sp
+    val iconSize = if (screenWidth < 600.dp) 30.dp else 50.dp
+    val panelFontSize = if (screenWidth < 600.dp) 36.sp else 48.sp
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .padding(16.dp)) {
         // Başlık
         Text(
             text = "Sudoku",
-            fontSize = 32.sp,
+            fontSize = titleFontSize,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.align(Alignment.CenterHorizontally)
         )
@@ -103,67 +124,109 @@ fun SudokuScreen(
 
         // Not Modu ve Zorluk Seviyesi Butonları
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Button(
-                onClick = { isNotesMode.value = !isNotesMode.value },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isNotesMode.value) Color.Green else Color.Blue
-                )
-            ) {
-                Text(text = if (isNotesMode.value) "Notes Mode: ON" else "Notes Mode: OFF")
-            }
-
             DifficultySelector(
                 selectedDifficulty = selectedDifficulty.value,
                 onDifficultySelected = { difficulty ->
                     selectedDifficulty.value = difficulty
                     sudokuGrid.value = generateSudokuBoard(difficulty)
                     errorMessage.value = ""
+                    selectedCell = null
                 }
             )
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
+        Spacer(modifier = Modifier.height(6.dp))
         // Sudoku Grid
         SudokuGrid(
             grid = sudokuGrid.value,
             errorMessage = errorMessage.value,
+            selectedCell = selectedCell,
             onCellClick = { row, col ->
-                selectedCell = Pair(row, col) // Seçilen hücre güncelleniyor
+                selectedCell = Pair(row, col) // Seçili hücre güncelleniyor
             },
             isNotesMode = isNotesMode.value
         )
 
         Spacer(modifier = Modifier.height(16.dp))
+Column {
 
+}
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+
+
+            Icon(
+                Icons.Outlined.Edit,
+                contentDescription = if (isNotesMode.value) "Not Modu Kapat" else "Not Modu Aç",
+                modifier = Modifier
+                    .padding(6.dp)
+                    .size(iconSize)
+                    .clickable { isNotesMode.value = !isNotesMode.value },
+                tint = if (isNotesMode.value) Color.Green else Color.Blue)
+            Icon(
+                Icons.Default.Refresh,
+                contentDescription = "Reset",
+                modifier = Modifier
+                    .padding(6.dp)
+                    .size(iconSize)
+                    .clickable {
+                        sudokuGrid.value = generateSudokuBoard(selectedDifficulty.value)
+                        errorMessage.value = ""
+                        selectedCell = null
+                    },
+                tint =  Color.Blue)
+            Icon(
+                Icons.Default.ArrowBack,
+                contentDescription = "Reset",
+                modifier = Modifier
+                    .padding(6.dp)
+                    .size(iconSize)
+                    .clickable {
+                        if (previousGrid.value != null) {
+                            sudokuGrid.value = previousGrid.value!!
+                            previousGrid.value = null
+                        }
+                    },
+                tint =  Color.Blue
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
         // NumbersPanel (Sayı Girişi)
         NumbersPanel(onNumberSelected = { number ->
             selectedCell?.let { (row, col) ->
+                previousGrid.value = sudokuGrid.value.map { it.map { cell -> cell.copy() } } // Önceki durumu kaydet
                 if (isNotesMode.value) {
                     updateCellPossibilities(sudokuGrid, row, col, number)
                 } else {
-                    updateCellValue(sudokuGrid, row, col, number, errorMessage)
+                    val isValid = updateCellValue(sudokuGrid, row, col, number, errorMessage)
+                    if (!isValid) {
+                        sudokuGrid.value = sudokuGrid.value.mapIndexed { r, rowList ->
+                            rowList.mapIndexed { c, cell ->
+                                if (r == row && c == col) cell.copy(isError = true) else cell
+                            }
+                        }
+                    }
                 }
             }
         })
-
-        Spacer(modifier = Modifier.height(16.dp))
-
         // Reset Butonu
-        Button(
-            onClick = {
-                sudokuGrid.value = generateSudokuBoard(selectedDifficulty.value)
-                errorMessage.value = ""
-                selectedCell = null
-            },
-            modifier = Modifier.align(Alignment.CenterHorizontally)
-        ) {
-            Text("Reset Game")
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+
         }
     }
+}
+
+private operator fun Unit.not(): Boolean {
+return false
 }
 
 fun selectCell(
@@ -178,90 +241,37 @@ fun selectCell(
     }
 }
 
-/*@Composable
-fun NumbersPanel(
-    onNumberSelected: (Int) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween // Daha eşit aralık için
-    ) {
-        (1..9).forEach { number ->
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .aspectRatio(1f) // Kutuların kare olmasını sağlar
-                    .padding(4.dp)
-                    .border(2.dp, Color.Black, shape = RoundedCornerShape(4.dp))
-                    .clickable { onNumberSelected(number) },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = number.toString(),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-    }
-}*/
 @Composable
 fun NumbersPanel(onNumberSelected: (Int) -> Unit) {
     val numbers = (1..9).toList()
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp // Ekran genişliği
     val cellWidth = screenWidth / numbers.size // Her kutunun eşit genişliği
-
+    val panelFontSize = if (screenWidth < 600.dp)36.sp else 48.sp
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         numbers.forEach { number ->
             Box(
                 modifier = Modifier
-                    .width(cellWidth - 8.dp) // Genişlik ekranın bir parçasına eşit
-                    .height(50.dp) // Yükseklik sabit
-                    .border(2.dp, Color.Black, RoundedCornerShape(4.dp))
+                    .width(cellWidth - 12.dp) // Genişlik ekranın bir parçasına eşit
+                    .height(cellWidth * 2 - 6.dp) // Yükseklik sabit
+                    .border(2.dp, Color.Transparent, RoundedCornerShape(4.dp))
                     .clickable { onNumberSelected(number) },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = number.toString(),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = panelFontSize,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Blue
                 )
             }
         }
     }
 }
-
-
-@Composable
-fun NumberSelectionPanel(onNumberSelected: (Int) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly
-    ) {
-        (1..9).forEach { number ->
-            Button(onClick = { onNumberSelected(number) }) {
-                Text(text = number.toString(), fontSize = 24.sp)
-            }
-        }
-    }
-}
-
-fun getSelectedCell(grid: List<List<SudokuCell>>): Pair<Int?, Int?> {
-    for ((rowIndex, row) in grid.withIndex()) {
-        for ((colIndex, cell) in row.withIndex()) {
-            if (cell.isSelected) return Pair(rowIndex, colIndex)
-        }
-    }
-    return Pair(null, null)
-}
-
 fun updateCellValue(
     grid: MutableState<List<List<SudokuCell>>>,
     row: Int,
@@ -304,12 +314,27 @@ fun isInSameBlock(row1: Int, col1: Int, row2: Int, col2: Int): Boolean {
 fun DifficultySelector(selectedDifficulty: String, onDifficultySelected: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val difficulties = listOf("Easy", "Medium", "Hard")
-
-    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp.dp
+    val iconSize = if (screenWidth < 600.dp) 30.dp else 50.dp
+   /* Box(modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center,
+        ) {
         Button(onClick = { expanded = true }) {
-            Text("Difficulty: $selectedDifficulty")
-        }
-
+            Text(modifier = Modifier.padding(2.dp),
+                fontSize = 12.sp, text = "Difficulty: $selectedDifficulty")
+        }*/
+    Icon(
+        Icons.Default.Menu,
+        contentDescription = "Diffuculty Selector",
+        modifier = Modifier
+            .padding(6.dp)
+            .size(iconSize)
+            .clickable {
+                expanded = true
+            },
+        tint =  Color.Blue
+    )
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false }
@@ -324,8 +349,8 @@ fun DifficultySelector(selectedDifficulty: String, onDifficultySelected: (String
                 )
             }
         }
+    TimerExample()
     }
-}
 
 fun updateCellPossibilities(
     grid: MutableState<List<List<SudokuCell>>>,
@@ -365,8 +390,9 @@ fun calculateCellSize(): Dp {
 fun SudokuGrid(
     grid: List<List<SudokuCell>>,
     errorMessage: String,
-    isNotesMode: Boolean,
-    onCellClick: (Int, Int) -> Unit
+    selectedCell: Pair<Int, Int>?,
+    onCellClick: (Int, Int) -> Unit,
+    isNotesMode: Boolean
 ) {
     val cellSize = calculateCellSize()
 
@@ -377,6 +403,7 @@ fun SudokuGrid(
                     SudokuCellView(
                         cell = cell,
                         cellSize = cellSize,
+                        isSelected = selectedCell?.let { it.first == cell.row && it.second == cell.col } == true,
                         onCellClick = { onCellClick(cell.row, cell.col) }
                     )
                 }
@@ -397,29 +424,71 @@ fun SudokuGrid(
 fun SudokuCellView(
     cell: SudokuCell,
     cellSize: Dp,
+    isSelected: Boolean,
     onCellClick: () -> Unit
 ) {
+    val backgroundColor = when {
+        cell.isError -> Color.Red.copy(alpha = 0.3f) // Yanlış giriş
+        isSelected -> Color.Cyan.copy(alpha = 0.3f) // Seçili hücre
+        else -> Color.White
+    }
+    var showDialog by remember { mutableStateOf(false) }
+
+    val borderColorBlack = Color.Black
+    val borderColorGray = Color.Gray
     Box(
         modifier = Modifier
             .size(cellSize)
-            .border(1.dp, Color.Black)
-            .clickable { onCellClick() }, // Hücre tıklanabilir
-        contentAlignment = Alignment.Center
+           // .border(1.dp, Color.Black)
+            .background(backgroundColor)
+            .clickable { onCellClick() }
+            .drawBehind {
+                drawLine(
+                color = if (cell.row % 3 == 0) borderColorBlack else borderColorGray,
+                start = Offset(0f, 0f),
+                end = Offset(size.width, 0f),
+                strokeWidth = if (cell.row % 3 == 0) 4f else 2f
+            )
+                // Alt çizgi
+                drawLine(
+                    color = if ((cell.row + 1) % 3 == 0) borderColorBlack else borderColorGray,
+                    start = Offset(0f, size.height),
+                    end = Offset(size.width, size.height),
+                    strokeWidth = if ((cell.row + 1) % 3 == 0) 4f else 2f
+                )
+                // Sol çizgi
+                drawLine(
+                    color = if (cell.col % 3 == 0) borderColorBlack else borderColorGray,
+                    start = Offset(0f, 0f),
+                    end = Offset(0f, size.height),
+                    strokeWidth = if (cell.col % 3 == 0) 4f else 2f
+                )
+                // Sağ çizgi
+                drawLine(
+                    color = if ((cell.col + 1) % 3 == 0) borderColorBlack else borderColorGray,
+                    start = Offset(size.width, 0f),
+                    end = Offset(size.width, size.height),
+                    strokeWidth = if ((cell.col + 1) % 3 == 0) 4f else 2f
+                ) },
+        contentAlignment = Alignment.Center,
     ) {
         if (cell.value != 0) {
             Text(
                 text = cell.value.toString(),
                 fontSize = (cellSize.value * 0.5).sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = if (cell.isError) Color.Red else Color.Black
             )
         } else if (cell.possibilities.isNotEmpty()) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center) {
                 cell.possibilities.chunked(3).forEach { row ->
-                    Row {
+                    Row(modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly) {
                         row.forEach { possibility ->
                             Text(
                                 text = possibility.toString(),
-                                fontSize = (cellSize.value * 0.15).sp
+                                fontSize = (cellSize.value * 0.20).sp
                             )
                         }
                     }

@@ -1,5 +1,27 @@
 package com.example.sudoku3
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+
 /*
 fun updateCellValue(
     grid: MutableState<List<List<SudokuCell>>>,
@@ -168,3 +190,48 @@ fun SudokuCellView(
     }
 }
 */
+/*
+fun getSelectedCell(grid: List<List<SudokuCell>>): Pair<Int?, Int?> {
+    for ((rowIndex, row) in grid.withIndex()) {
+        for ((colIndex, cell) in row.withIndex()) {
+            if (cell.isSelected) return Pair(rowIndex, colIndex)
+        }
+    }
+    return Pair(null, null)
+}*/
+@Composable
+fun formatTime(seconds: Int): String {
+    val minutes = seconds / 60
+    val remainingSeconds = seconds % 60
+    return String.format("%02d:%02d", minutes, remainingSeconds)
+}
+
+@Composable
+fun TimerExample() {
+    var seconds by remember { mutableStateOf(0) }
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp.dp
+    val iconSize = if (screenWidth < 600.dp) 30.dp else 50.dp
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            seconds++
+        }
+    }
+   Button(onClick = { /*TODO*/ }) {
+     /*  Icon(
+           Icons.Default.Timer,
+           contentDescription = "Timer",
+           modifier = Modifier
+               .padding(6.dp)
+               .size(iconSize),
+           tint =  Color.Blue
+       )*/
+       Text(
+           text = formatTime(seconds),
+           fontSize = 16.sp,
+           modifier = Modifier.padding(start = 8.dp)
+       )
+   }
+
+}
